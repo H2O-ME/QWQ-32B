@@ -3,14 +3,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const avatarStyle = document.createElement('style');
     avatarStyle.textContent = `
         .logo-icon {
-            background-image: url('https://img.picui.cn/free/2025/03/17/67d8459d88fbf.png') !important;
+            background-image: url('http://chat.ccccocccc.cc/favicon.png') !important;
             background-size: contain;
             background-position: center;
             background-repeat: no-repeat;
         }
         
         .bot-avatar {
-            background-image: url('https://img.picui.cn/free/2025/03/17/67d8459d88fbf.png') !important;
+            background-image: url('http://chat.ccccocccc.cc/favicon.png') !important;
             background-size: contain;
             background-position: center;
             background-repeat: no-repeat;
@@ -223,21 +223,9 @@ document.addEventListener('DOMContentLoaded', function() {
         return messageElement.querySelector('.bot-message');
     }
     
-    // 更新机器人消息 - 修改为支持推理内容和正式回复
-    function updateBotMessage(element, content, reasoningContent = null) {
-        let htmlContent = '';
-        
-        // 如果有推理内容，先显示推理内容
-        if (reasoningContent) {
-            htmlContent += `<div class="reasoning-content"><h4>🤔 推理过程</h4>${marked.parse(reasoningContent)}</div>`;
-        }
-        
-        // 添加正式回复
-        if (content) {
-            htmlContent += `<div class="formal-response">${marked.parse(content)}</div>`;
-        }
-        
-        element.innerHTML = htmlContent;
+    // 更新机器人消息
+    function updateBotMessage(element, content) {
+        element.innerHTML = marked.parse(content);
         
         // 应用语法高亮
         if (window.hljs) {
@@ -360,8 +348,10 @@ document.addEventListener('DOMContentLoaded', function() {
         fetchAIResponse(message, botMessageElement);
     }
     
-    // 调用GLM-4-Flash API - 修改为处理content和reasoning_content
+    // 调用GLM-4-Flash API
     async function fetchAIResponse(prompt, botMessageElement) {
+        
+        
         // 请求数据结构
         const requestData = {
             messages: [
@@ -385,6 +375,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
+                    
                 },
                 body: JSON.stringify(requestData)
             });
@@ -396,7 +387,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let responseText = "";
-            let reasoningText = "";
 
             // 接收流式响应
             while (true) {
@@ -414,18 +404,10 @@ document.addEventListener('DOMContentLoaded', function() {
                             if (jsonStr === '[DONE]') continue;
                             
                             const data = JSON.parse(jsonStr);
-                            
-                            // 处理推理内容
                             if (data.choices?.[0]?.delta?.reasoning_content) {
-                                reasoningText += data.choices[0].delta.reasoning_content;
-                                updateBotMessage(botMessageElement, responseText, reasoningText);
-                            } 
-                            // 处理正式回复内容
-                            else if (data.choices?.[0]?.delta?.content) {
-                                responseText += data.choices[0].delta.content;
-                                updateBotMessage(botMessageElement, responseText, reasoningText);
-                            }
-                            else if (data.choices?.[0]?.finish_reason) {
+                                responseText += data.choices[0].delta.reasoning_content;
+                                updateBotMessage(botMessageElement, responseText);
+                            } else if (data.choices?.[0]?.finish_reason) {
                                 // End of stream
                             } else {
                                 throw new Error(data.msg || 'API响应异常');
@@ -438,7 +420,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // 确保最终更新
-            updateBotMessage(botMessageElement, responseText, reasoningText);
+            updateBotMessage(botMessageElement, responseText);
             
         } catch (error) {
             console.error("API请求错误:", error);
