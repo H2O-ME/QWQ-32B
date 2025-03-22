@@ -3,14 +3,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const avatarStyle = document.createElement('style');
     avatarStyle.textContent = `
         .logo-icon {
-            background-image: url('https://img20.360buyimg.com/openfeedback/jfs/t1/275291/18/7473/12144/67dd638bF07767365/4cfd58139b349fd4.png') !important;
+            background-image: url('/favicon.png') !important;
             background-size: contain;
             background-position: center;
             background-repeat: no-repeat;
         }
         
         .bot-avatar {
-            background-image: url('https://img20.360buyimg.com/openfeedback/jfs/t1/275291/18/7473/12144/67dd638bF07767365/4cfd58139b349fd4.png') !important;
+            background-image: url('/favicon.png') !important;
             background-size: contain;
             background-position: center;
             background-repeat: no-repeat;
@@ -23,6 +23,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const sendButton = document.getElementById('send-btn');
     const newChatButton = document.getElementById('new-chat');
     const themeToggle = document.getElementById('theme-toggle');
+    
+    // 添加验证状态跟踪
+    let isAuthenticated = false;
+    // 设置密码
+    const correctPassword = "thw"; // 将此替换为您想要的密码
     
     // 设置当前日期
     const currentDateElem = document.getElementById('current-date');
@@ -224,8 +229,20 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // 更新机器人消息
-    function updateBotMessage(element, content) {
-        element.innerHTML = marked.parse(content);
+    function updateBotMessage(element, content, reasoningContent = null) {
+        let htmlContent = '';
+        
+        // 如果有推理内容，先显示推理内容
+        if (reasoningContent && reasoningContent.trim()) {
+            htmlContent += `<div class="reasoning-content"><h4>🤔 推理过程</h4>${marked.parse(reasoningContent)}</div>`;
+        }
+        
+        // 添加正式回复
+        if (content && content.trim()) {
+            htmlContent += `<div class="formal-response">${marked.parse(content)}</div>`;
+        }
+        
+        element.innerHTML = htmlContent || '<div class="typing-indicator"><span></span><span></span><span></span></div>';
         
         // 应用语法高亮
         if (window.hljs) {
@@ -246,11 +263,11 @@ document.addEventListener('DOMContentLoaded', function() {
         chatContainer.scrollTop = chatContainer.scrollHeight;
     }
     
-    // 获取用户输入的密码并解密API密钥
-    async function getDecryptedApiKey() {
-        // 如果已经解密过，直接返回
-        if (decryptedApiKey) {
-            return decryptedApiKey;
+    // 密码验证函数
+    async function verifyPassword() {
+        // 如果已经验证过，直接返回
+        if (isAuthenticated) {
+            return true;
         }
         
         // 创建密码输入对话框
@@ -264,15 +281,15 @@ document.addEventListener('DOMContentLoaded', function() {
             
             modalContainer.innerHTML = `
                 <div class="modal-header">
-                    <h3>请输入授权码</h3>
+                    <h3>请输入密码</h3>
                 </div>
                 <div class="modal-body">
-                    <p>请输入作者提供的密码以继续使用</p>
-                    <input type="password" id="decrypt-password" class="password-input" placeholder="输入密码...">
+                    <p>请输入管理员提供的密码以继续使用</p>
+                    <input type="password" id="password-input" class="password-input" placeholder="输入密码...">
                     <div class="error-message" style="display: none; color: #dc3545; margin-top: 10px;"></div>
                 </div>
                 <div class="modal-footer">
-                    <button id="decrypt-button" class="decrypt-button">解密</button>
+                    <button id="verify-button" class="decrypt-button">验证</button>
                 </div>
             `;
             
@@ -281,15 +298,15 @@ document.addEventListener('DOMContentLoaded', function() {
             document.body.appendChild(modalOverlay);
             
             // 获取元素
-            const passwordInput = document.getElementById('decrypt-password');
-            const decryptButton = document.getElementById('decrypt-button');
+            const passwordInput = document.getElementById('password-input');
+            const verifyButton = document.getElementById('verify-button');
             const errorMessage = document.querySelector('.error-message');
             
             // 自动聚焦到密码输入框
             passwordInput.focus();
             
-            // 点击解密按钮
-            const handleDecrypt = () => {
+            // 验证密码
+            const handleVerify = () => {
                 const password = passwordInput.value.trim();
                 if (!password) {
                     errorMessage.textContent = '请输入密码';
@@ -297,43 +314,54 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
                 
-                try {
-                    // 尝试解密
-                    const apiKey = decryptApiKey(encryptedApiKey, password);
-                    if (!apiKey) {
-                        throw new Error('解密失败，密码可能不正确');
-                    }
-                    
-                    // 解密成功，移除模态框
+                // 简单的密码验证
+                if (password === correctPassword) {
+                    // 验证成功，移除模态框
                     document.body.removeChild(modalOverlay);
-                    decryptedApiKey = apiKey; // 保存解密后的密钥
-                    resolve(apiKey);
-                } catch (error) {
-                    errorMessage.textContent = '解密失败，请检查密码是否正确';
+                    isAuthenticated = true; // 标记为已验证
+                    resolve(true);
+                } else {
+                    errorMessage.textContent = '密码不正确，请重试';
                     errorMessage.style.display = 'block';
                     passwordInput.value = '';
                     passwordInput.focus();
                 }
             };
             
-            // 点击解密按钮
-            decryptButton.addEventListener('click', handleDecrypt);
+            // 点击验证按钮
+            verifyButton.addEventListener('click', handleVerify);
             
-            // 按Enter键也可以解密
+            // 按Enter键也可以验证
             passwordInput.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    handleDecrypt();
+                    handleVerify();
                 }
             });
         });
     }
     
-    // 发送消息函数
+    // 修改发送消息函数
     function sendMessage() {
         const message = userInput.value.trim();
         if (!message) return;
         
+        // 如果未验证，先进行密码验证
+        if (!isAuthenticated) {
+            verifyPassword().then(verified => {
+                if (verified) {
+                    // 验证成功后继续发送消息
+                    processSendMessage(message);
+                }
+            });
+        } else {
+            // 已验证过，直接发送消息
+            processSendMessage(message);
+        }
+    }
+    
+    // 抽取发送消息的处理逻辑到单独的函数
+    function processSendMessage(message) {
         // 添加用户消息到聊天容器
         addUserMessage(message);
         
@@ -344,14 +372,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // 添加正在输入指示器
         const botMessageElement = addBotTypingIndicator();
         
-        // 调用GLM-4-Flash API
+        // 调用API
         fetchAIResponse(message, botMessageElement);
     }
     
     // 调用GLM-4-Flash API
     async function fetchAIResponse(prompt, botMessageElement) {
-        
-        
         // 请求数据结构
         const requestData = {
             messages: [
@@ -367,7 +393,7 @@ document.addEventListener('DOMContentLoaded', function() {
         };
 
         try {
-            // GLM-4-Flash API端点
+            // API端点
             const apiUrl = "https://api.pearktrue.cn/api/aichat/";
             
             // 使用fetch API发送请求
@@ -375,7 +401,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    
                 },
                 body: JSON.stringify(requestData)
             });
@@ -387,6 +412,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let responseText = "";
+            let reasoningText = "";
 
             // 接收流式响应
             while (true) {
@@ -404,13 +430,22 @@ document.addEventListener('DOMContentLoaded', function() {
                             if (jsonStr === '[DONE]') continue;
                             
                             const data = JSON.parse(jsonStr);
+                            
+                            // 处理推理内容
                             if (data.choices?.[0]?.delta?.reasoning_content) {
-                                responseText += data.choices[0].delta.reasoning_content;
-                                updateBotMessage(botMessageElement, responseText);
-                            } else if (data.choices?.[0]?.finish_reason) {
+                                reasoningText += data.choices[0].delta.reasoning_content;
+                            }
+                            
+                            // 处理正式回复内容
+                            if (data.choices?.[0]?.delta?.content) {
+                                responseText += data.choices[0].delta.content;
+                            }
+                            
+                            // 更新消息显示
+                            updateBotMessage(botMessageElement, responseText, reasoningText);
+                            
+                            if (data.choices?.[0]?.finish_reason) {
                                 // End of stream
-                            } else {
-                                throw new Error(data.msg || 'API响应异常');
                             }
                         } catch (e) {
                             console.error("解析响应数据错误:", e, line);
@@ -420,7 +455,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // 确保最终更新
-            updateBotMessage(botMessageElement, responseText);
+            updateBotMessage(botMessageElement, responseText, reasoningText);
             
         } catch (error) {
             console.error("API请求错误:", error);
